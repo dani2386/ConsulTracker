@@ -2,3 +2,4 @@ polars
 streamlit
 watchdog
 pandas
+openpyxl
