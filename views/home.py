@@ -32,6 +32,19 @@ if name: filtered_data = filtered_data[filtered_data['Nome'].str.contains(name, 
 if status != '----': filtered_data = filtered_data[filtered_data['Estado'] == status]
 if risk != '----': filtered_data = filtered_data[filtered_data['Nível de Risco'] == risk]
 
+# Flagged rows appear first
+filtered_data = (
+    filtered_data.assign(
+        Alerta_Ordem=(filtered_data['Alerta MCDT'] == 'Sim').astype(int)
+    )
+    .sort_values(
+        by=["Alerta_Ordem", "Data Marcação Normalizada"],
+        ascending=[False, True],
+        na_position="last",
+    )
+    .drop(columns=["Alerta_Ordem"])
+)
+
 st.caption(f'A mostrar {len(filtered_data)} de {len(data)} registos encontrados.')
 
 home_columns = [
