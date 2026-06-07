@@ -16,7 +16,6 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = PROJECT_ROOT / "data"
 
 @st.cache_data
-
 def load_sources():
     consultas = pd.read_excel(DATA_DIR / "consulta_demo.xlsx", sheet_name="Folha1")
     mcdt = pd.read_excel(DATA_DIR / "mcdt_demo.xlsx", sheet_name="Folha1")
@@ -24,6 +23,7 @@ def load_sources():
 
     return consultas, mcdt, risco
 
+@st.cache_data
 def load_consultas_with_risk():
     # Load consultations, exams, and risk tables
     consultas, mcdt, risco = load_sources()
@@ -49,6 +49,7 @@ def load_consultas_with_risk():
     # Return the consultation table with risk info added
     return consultas
 
+@st.cache_data
 def load_consultas_enriched():
     # Start with consultations + risk
     # then add MCDT summary info per consultation episode
@@ -116,7 +117,7 @@ def load_consultas_enriched():
 
     consultas["Alerta MCDT"] = (
         consultas["Consulta nos Próximos 7 Dias"]
-        & (consultas["MCDT Pendentes"] >= 0)
+        & (consultas["MCDT Pendentes"] > 0)
     )
 
     consultas["Consulta nos Próximos 7 Dias"] = consultas["Consulta nos Próximos 7 Dias"].map(
@@ -129,23 +130,49 @@ def load_consultas_enriched():
 
     # Creating "Tem MCDT Pendente" as yes/no column
     consultas["Tem MCDT Pendente"] = consultas["MCDT Pendentes"].apply(
-        lambda value: "Sim" if value > 0 else "Nao"
+        lambda value: "Sim" if value > 0 else "Não"
     )
-
-    today = pd.Timestamp.today().normalize()
-    limit_date = today + pd.Timedelta(days=7)
 
     return consultas
 
-def load_data():
-    return pd.DataFrame({
-        'Utente': [101, 102, 103, 103],
-        'Nome': ['João Silva', 'Maria Freitas', 'Carlos Costa', 'Carlos Costa'],
-        'Idade': [24, 32, 62, 62],
-        'Tel.': ['939749612', '925909653', '965509424', '965509424'],
-        'Data': ['22-05-2024', '23-05-2024', '24-05-2024', '22-05-2024'],
-        'Especialidade': ['Medicina Geral', 'Ginecologia', 'Urologia', 'Ortopedia'],
-        'Estado': ['Agendado', 'Agendado', 'Agendado', 'Realizado'],
-        'Risco': ['Baixo', 'Baixo', 'Moderado', 'Moderado'],
-        'Flagged': [True, False, False, True]
-    })
+@st.cache_data
+def load_utente_history(numero_sns):
+    consultas, mcdt, risco = load_sources()
+
+    numero_sns = int(numero_sns)
+
+    patient_consultas = consultas[
+        consultas["Número SNS"] == numero_sns
+    ].copy()
+
+    risco_latest = (
+        risco.sort_values("Ano")
+        .drop_duplicates("Nº Utente", keep="last")
+    )
+
+    patient_risk = risco_latest[
+        risco_latest["Nº Utente"] == numero_sns
+    ]
+
+    episode_codes = patient_consultas["Episódio.Código Episódio"].dropna().unique()
+
+    patient_mcdt = mcdt[
+        mcdt["Episódio.Código Episódio"].isin(episode_codes)
+    ].copy()
+
+    patient_consultas["Data Marcação Normalizada"] = pd.to_datetime(
+        patient_consultas["Data Marcação.Data"],
+        errors="coerce",
+    )
+
+    patient_consultas["Data Marcação Formatada"] = (
+        patient_consultas["Data Marcação Normalizada"].dt.strftime("%d-%m-%Y")
+    )
+
+    patient_consultas = patient_consultas.sort_values(
+        "Data Marcação Normalizada",
+        ascending=False,
+        na_position="last",
+    )
+
+    return patient_consultas, patient_mcdt, patient_risk

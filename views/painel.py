@@ -18,47 +18,102 @@ metrics[1].metric(label='Consultas com MCDT Pendente', value=len(consultas_com_m
 
 st.divider()
 
-st.subheader("Listagem de Consultas")
+st.subheader("Filtros")
 
-filters = st.columns([2, 1, 1])
+valid_dates = data["Data Marcação Normalizada"].dropna()
 
-name = filters[0].text_input('Nome do Utente:')
-status = filters[1].selectbox('Estado:', options=['----'] + list(data['Estado'].dropna().unique()))
-risk = filters[2].selectbox('Nível de Risco:', options=['----'] + list(data['Nível de Risco'].dropna().unique()))
+filters_1 = st.columns([2, 1, 1, 1])
+
+search = filters_1[0].text_input("Nome ou Nº SNS:")
+status = filters_1[1].selectbox(
+    "Estado:",
+    options=["Todos"] + list(data["Estado"].dropna().unique()),
+)
+risk = filters_1[2].selectbox(
+    "Nível de Risco:",
+    options=["Todos"] + list(data["Nível de Risco"].dropna().unique()),
+)
+alert_filter = filters_1[3].selectbox(
+    "Alerta MCDT:",
+    options=["Todos", "Com alerta", "Sem alerta"],
+)
+
+filters_2 = st.columns([2, 1, 1])
+
+service = filters_2[0].selectbox(
+    "Serviço SIG:",
+    options=["Todos"] + sorted(data["Serviço Executante.Serviço SIG - DW"].dropna().unique()),
+)
+
+mcdt_filter = filters_2[1].selectbox(
+    "MCDT:",
+    options=["Todos", "Com pendentes", "Sem pendentes"],
+)
+
+if not valid_dates.empty:
+    date_range = filters_2[2].date_input(
+        "Intervalo:",
+        value=(valid_dates.min().date(), valid_dates.max().date()),
+    )
+else:
+    date_range = None
 
 filtered_data = data.copy()
 
-if name: filtered_data = filtered_data[filtered_data['Nome'].str.contains(name, case=False, na=False)]
-if status != '----': filtered_data = filtered_data[filtered_data['Estado'] == status]
-if risk != '----': filtered_data = filtered_data[filtered_data['Nível de Risco'] == risk]
+if search:
+    search_value = search.strip()
+    filtered_data = filtered_data[
+        filtered_data["Nome"].astype(str).str.contains(search_value, case=False, na=False)
+        | filtered_data["Número SNS"].astype(str).str.contains(search_value, na=False)
+    ]
 
-# Flagged rows appear first
-filtered_data = (
-    filtered_data.assign(
-        Alerta_Ordem=(filtered_data['Alerta MCDT'] == 'Sim').astype(int)
-    )
-    .sort_values(
-        by=["Alerta_Ordem", "Data Marcação Normalizada"],
-        ascending=[False, True],
-        na_position="last",
-    )
-    .drop(columns=["Alerta_Ordem"])
+if status != "Todos":
+    filtered_data = filtered_data[filtered_data["Estado"] == status]
+
+if risk != "Todos":
+    filtered_data = filtered_data[filtered_data["Nível de Risco"] == risk]
+
+if service != "Todos":
+    filtered_data = filtered_data[
+        filtered_data["Serviço Executante.Serviço SIG - DW"] == service
+    ]
+
+if alert_filter == "Com alerta":
+    filtered_data = filtered_data[filtered_data["Alerta MCDT"] == "Sim"]
+elif alert_filter == "Sem alerta":
+    filtered_data = filtered_data[filtered_data["Alerta MCDT"] == "Não"]
+
+if mcdt_filter == "Com pendentes":
+    filtered_data = filtered_data[filtered_data["MCDT Pendentes"] > 0]
+elif mcdt_filter == "Sem pendentes":
+    filtered_data = filtered_data[filtered_data["MCDT Pendentes"] == 0]
+
+if date_range and len(date_range) == 2:
+    start_date = pd.Timestamp(date_range[0])
+    end_date = pd.Timestamp(date_range[1])
+
+    filtered_data = filtered_data[
+        (filtered_data["Data Marcação Normalizada"] >= start_date)
+        & (filtered_data["Data Marcação Normalizada"] <= end_date)
+    ]
+
+filtered_data = filtered_data.sort_values(
+    by=["Data Marcação Normalizada"],
+    ascending=True,
+    na_position="last",
 )
-
-st.caption(f'A mostrar {len(filtered_data)} de {len(data)} registos encontrados.')
-
 home_columns = [
     "Número SNS",
-    #"Número Processo",
     "Episódio.Código Episódio",
     "Nome",
     "Anos",
     "Data Marcação Formatada",
     "Serviço Executante.Serviço SIG - DW",
+    "Tipo Consulta MTS",
     "Estado",
     "Nível de Risco",
+    "MCDT Total",
     "MCDT Pendentes",
-    #"Tem MCDT Pendente",
     "Alerta MCDT",
 ]
 
