@@ -1,6 +1,6 @@
 import streamlit as st
 
-from database import load_consultas_enriched, load_sources
+from src.engine import load_consultas_enriched, load_sources
 
 
 data = load_consultas_enriched()

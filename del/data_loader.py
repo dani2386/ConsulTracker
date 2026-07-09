@@ -1,19 +1,34 @@
-import pandas as pd
+import polars as pl
 import streamlit as st
 
-from pathlib import Path
+from src.config import DATA_DIR
+
 
 # Helper function to uniformize date formats
 def format_date(value):
     date = pd.to_datetime(value, errors="coerce")
 
-    if pd.isna(date):
-        return ""
+    if pd.isna(date): return ""
 
     return date.strftime("%d-%m-%Y")
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
-DATA_DIR = PROJECT_ROOT / "data"
+
+def data_to_parquet():
+    df_consulta = pl.read_excel(DATA_DIR / 'consulta.xlsx', engine='calamine').lazy()
+    df_risco = pl.read_excel(DATA_DIR / 'risco.xlsx', engine='calamine').lazy()
+    df_mcdt = pl.read_excel(DATA_DIR / 'mcdt.xlsx', engine='calamine')
+
+    df_risco = (
+        df_risco.sort('Ano')
+        .unique(subset=['Número SNS'], keep='last')
+        .rename({'Nº Utente': 'Número SNS', 'Ano': 'Ano de risco'})
+    )
+
+    df_consulta = df_consulta.join(df_risco, on='Número SNS', how='inner')
+
+    df_consulta.sink_parquet(DATA_DIR / 'consulta.parquet', compression='zstd')
+    df_mcdt.write_parquet(DATA_DIR / 'mcdt.parquet', compression='zstd')
+
 
 @st.cache_data
 def load_sources():

@@ -1,5 +1,3 @@
 polars
 streamlit
-watchdog
-pandas
-openpyxl
+fastexcel

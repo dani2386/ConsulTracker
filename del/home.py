@@ -1,7 +1,5 @@
 import streamlit as st
-from database import load_consultas_enriched
-import pandas as pd
-
+from src.engine import load_consultas_enriched
 
 data = load_consultas_enriched()
 
